@@ -1,0 +1,147 @@
+- hosts: appserver
+  tasks:
+
+####### Install required package #######
+
+    - name: install required package for configration 
+      become_user: root
+      ansible.builtin.yum:
+        name: "{{ packages }}"
+        vars:
+          packages:
+          - nginx
+          - wget
+
+######## Configure uWSGI as service ##########
+
+    - name: Create WSGI file and
+      file:
+        path: "/home/appuser/app/wsgi.py"
+        state: touch
+
+    - name: Create Aplication INI File
+      file:
+        path: "/home/appuser/app/app.ini"
+        state: touch
+
+    - name: "Update WSGI file"
+      ansible.builtin.copy:
+        src: "wsgi.py"
+        dest: "/home/appuser/app/wsgi.py"
+        backup: yes
+        mode: '0775'
+    
+    - name: "Update Aplication INI File"
+      ansible.builtin.copy:
+        src: "app.ini"
+        dest: "/home/appuser/app/app.ini"
+        backup: yes
+        mode: '0775'
+    
+    - name: Create uWSGI service File
+      file:
+        path: "/etc/systemd/system/uwsgi.service"
+        state: touch
+    
+    - name: "Update uWSGI service file"
+      ansible.builtin.copy:
+        src: "uwsgi.service"
+        dest: "/etc/systemd/system/uwsgi.service"
+        backup: yes
+        mode: '0775'
+
+    - name: uWSGI service start command  
+      shell: |
+        systemctl daemon-reload
+        systemctl start uwsgi
+        systemctl status uwsgi
+
+######### Configure Nginx to serve uWSGI #########
+
+    # - name: "Checking Nginx folders"
+    #   stat:
+    #     path: "{{item}}"
+    #   register: folder_stats
+    #   with_items:
+    #   - ["/etc/nginx/sites-available/","/etc/nginx/sites-enabled/"]
+    
+    # - name: "Creating multiple folders"
+    #   file:
+    #     path: "{{item.item}}"
+    #     state: directory
+    #     mode: 0755
+    #     group: root
+    #     owner: root
+    #   when: item.stat.exists == false
+    #   loop:
+    #   - "{{folder_stats.results}}"
+        
+    - name: Enable uwsgi sites
+      template:
+        src: config_files/nginx.conf
+        dest: /etc/nginx/uwsgi.conf
+        backup: yes
+        owner: root
+        group: root
+        mode: '0755'
+      notify: restart nginx 
+
+    - name: Enable uwsgi sites
+      template:
+        src: config_files/uwsgi.conf
+        dest: /etc/nginx/sites-enabled/uwsgi.conf
+        backup: yes
+        owner: root
+        group: root
+        mode: '0755'
+      notify: restart nginx  
+
+    - name: available uwsgi sites
+      template:
+        src: /etc/nginx/sites-enabled/uwsgi.conf
+        dest: /etc/nginx/sites-available/uwsgi.conf
+        owner: root
+        group: root
+        mode: '0755'
+      notify: restart nginx
+    
+    - name: create uWSGI log directory
+      file: 
+        path: /var/log/nginx/uwsgi
+        state: directory
+        recurse: yes
+        owner: root
+        group: root
+        mode: '0766'
+
+
+    - name: Nginx service start command  
+      shell: |
+        nginx -t
+        systemctl start nginx
+        systemctl status nginx
+        systemctl enable nginx
+
+######## Iptables Configration ########
+
+    - name: Allow IP ranges that accessed by trusted server only
+      ansible.builtin.iptables:
+        chain: FORWARD
+        src_range: 192.168.1.100-192.168.1.199
+        dst_range: 10.0.0.1-10.0.0.50
+        jump: ACCEPT
+
+    - name: Allow connections on multiple ports
+      ansible.builtin.iptables:
+        chain: INPUT
+        protocol: tcp
+        destination_ports:
+          - "80"
+          - "443"
+          - "22"
+        jump: ACCEPT
+
+    - name: Iptables service start command  
+      shell: |
+        iptable-save
+        systemctl reload iptables

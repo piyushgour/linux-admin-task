@@ -1,0 +1,17 @@
+[Unit]
+Description=uWSGI instance to serve App project
+After=network.target
+
+[Service]
+User=appuser
+Group=nginx
+WorkingDirectory=/home/appuser/app
+Environment="PATH=/home/appuser/ve-app/bin"
+ExecStartPre=-/usr/bin/bash -c 'mkdir -p /run/uwsgi; chown appuser:nginx /run/uwsgi'
+ExecStart=/usr/bin/bash -c 'cd /home/appuser/app; source /home/appuser/ve-app/bin/activate; uwsgi --ini app.ini'
+
+
+
+
+[Install]
+WantedBy=multi-user.target
