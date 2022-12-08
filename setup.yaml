@@ -19,7 +19,7 @@
         path: "/home/appuser/app/wsgi.py"
         state: touch
 
-    - name: Create Aplication INI File
+    - name: Create Application INI File
       file:
         path: "/home/appuser/app/app.ini"
         state: touch
